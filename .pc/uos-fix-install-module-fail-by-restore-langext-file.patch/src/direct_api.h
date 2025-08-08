@@ -39,7 +39,4 @@ int semanage_direct_access_check(struct semanage_handle *sh);
 
 int semanage_direct_mls_enabled(struct semanage_handle *sh);
 
-int semanage_direct_check_and_restore_all_modules(struct semanage_handle *sh);
-int semanage_direct_set_restore_module_flag(struct semanage_handle *sh, int enabled);
-
 #endif

@@ -226,14 +226,13 @@ static semanage_list_t *get_shell_list(void)
 		if (strcmp(temp, PATH_NOLOGIN_SHELL)) {
 			if (semanage_list_push(&list, temp)) {
 				free(temp);
-				fclose(shells);
 				semanage_list_destroy(&list);
 				return default_shell_list();
 			}
 		}
 	}
 	free(temp);
-	fclose(shells);
+
 	return list;
 }
 
@@ -1008,7 +1007,7 @@ static int add_user(genhomedircon_settings_t * s,
 
 	retval = getpwnam_r(name, &pwstorage, rbuf, rbuflen, &pwent);
 	if (retval != 0 || pwent == NULL) {
-		if (retval != 0 && retval != ENOENT && retval != ENETUNREACH) {
+		if (retval != 0 && retval != ENOENT) {
 			goto cleanup;
 		}
 

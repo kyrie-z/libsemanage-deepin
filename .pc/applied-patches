@@ -1,0 +1,9 @@
+disable-expand-check.patch
+semigrate-store.patch
+fix_tests.patch
+fix-shells-not-close-in-src-genhomedircon.patch
+fix-genhomedircon-to-fit-uos-udcp.patch
+uos-feat-support-selinux2-decoupling.patch
+uos-fix-install-module-fail-by-restore-langext-file.patch
+uos-add-debug-log-for-restore-langext-file.patch
+uos-optimize-module-disable-warning.patch

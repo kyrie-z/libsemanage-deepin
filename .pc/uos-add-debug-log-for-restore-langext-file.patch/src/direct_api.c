@@ -455,194 +455,6 @@ static int parse_module_headers(semanage_handle_t * sh, char *module_data,
        return 0;
 }
 
-#include <stdlib.h>
-#include <bzlib.h>
-#include <string.h>
-#include <sys/sendfile.h>
-
-/* bzip() a data to a file, returning the total number of compressed bytes
- * in the file.  Returns -1 if file could not be compressed. */
-static ssize_t bzip(semanage_handle_t *sh, const char *filename, char *data,
-			size_t num_bytes)
-{
-	BZFILE* b;
-	size_t  size = 1<<16;
-	int     bzerror;
-	size_t  total = 0;
-	size_t len = 0;
-	FILE *f;
-
-	if ((f = fopen(filename, "wb")) == NULL) {
-		return -1;
-	}
-
-	if (!sh->conf->bzip_blocksize) {
-		if (fwrite(data, 1, num_bytes, f) < num_bytes) {
-			fclose(f);
-			return -1;
-		}
-		fclose(f);
-		return num_bytes;
-	}
-
-	b = BZ2_bzWriteOpen( &bzerror, f, sh->conf->bzip_blocksize, 0, 0);
-	if (bzerror != BZ_OK) {
-		BZ2_bzWriteClose ( &bzerror, b, 1, 0, 0 );
-		return -1;
-	}
-
-	while ( num_bytes > total ) {
-		if (num_bytes - total > size) {
-			len = size;
-		} else {
-			len = num_bytes - total;
-		}
-		BZ2_bzWrite ( &bzerror, b, &data[total], len );
-		if (bzerror == BZ_IO_ERROR) {
-			BZ2_bzWriteClose ( &bzerror, b, 1, 0, 0 );
-			return -1;
-		}
-		total += len;
-	}
-
-	BZ2_bzWriteClose ( &bzerror, b, 0, 0, 0 );
-	fclose(f);
-	if (bzerror == BZ_IO_ERROR) {
-		return -1;
-	}
-	return total;
-}
-
-#define BZ2_MAGICSTR "BZh"
-#define BZ2_MAGICLEN (sizeof(BZ2_MAGICSTR)-1)
-
-/* bunzip() a file to '*data', returning the total number of uncompressed bytes
- * in the file.  Returns -1 if file could not be decompressed. */
-ssize_t bunzip(semanage_handle_t *sh, FILE *f, char **data)
-{
-	BZFILE* b = NULL;
-	size_t  nBuf;
-	char*   buf = NULL;
-	size_t  size = 1<<18;
-	size_t  bufsize = size;
-	int     bzerror;
-	size_t  total=0;
-	char*   uncompress = NULL;
-	char*   tmpalloc = NULL;
-	int     ret = -1;
-
-	buf = malloc(bufsize);
-	if (buf == NULL) {
-		ERR(sh, "Failure allocating memory.");
-		goto exit;
-	}
-
-	/* Check if the file is bzipped */
-	bzerror = fread(buf, 1, BZ2_MAGICLEN, f);
-	rewind(f);
-	if ((bzerror != BZ2_MAGICLEN) || memcmp(buf, BZ2_MAGICSTR, BZ2_MAGICLEN)) {
-		goto exit;
-	}
-
-	b = BZ2_bzReadOpen ( &bzerror, f, 0, sh->conf->bzip_small, NULL, 0 );
-	if ( bzerror != BZ_OK ) {
-		ERR(sh, "Failure opening bz2 archive.");
-		goto exit;
-	}
-
-	uncompress = malloc(size);
-	if (uncompress == NULL) {
-		ERR(sh, "Failure allocating memory.");
-		goto exit;
-	}
-
-	while ( bzerror == BZ_OK) {
-		nBuf = BZ2_bzRead ( &bzerror, b, buf, bufsize);
-		if (( bzerror == BZ_OK ) || ( bzerror == BZ_STREAM_END )) {
-			if (total + nBuf > size) {
-				size *= 2;
-				tmpalloc = realloc(uncompress, size);
-				if (tmpalloc == NULL) {
-					ERR(sh, "Failure allocating memory.");
-					goto exit;
-				}
-				uncompress = tmpalloc;
-			}
-			memcpy(&uncompress[total], buf, nBuf);
-			total += nBuf;
-		}
-	}
-	if ( bzerror != BZ_STREAM_END ) {
-		ERR(sh, "Failure reading bz2 archive.");
-		goto exit;
-	}
-
-	ret = total;
-	*data = uncompress;
-
-exit:
-	BZ2_bzReadClose ( &bzerror, b );
-	free(buf);
-	if ( ret < 0 ) {
-		free(uncompress);
-	}
-	return ret;
-}
-
-/* mmap() a file to '*data',
- *  If the file is bzip compressed map_file will uncompress
- * the file into '*data'.
- * Returns the total number of bytes in memory .
- * Returns -1 if file could not be opened or mapped. */
-static ssize_t map_file(semanage_handle_t *sh, const char *path, char **data,
-			int *compressed)
-{
-	ssize_t size = -1;
-	char *uncompress;
-	int fd = -1;
-	FILE *file = NULL;
-
-	fd = open(path, O_RDONLY);
-	if (fd == -1) {
-		ERR(sh, "Unable to open %s\n", path);
-		return -1;
-	}
-
-	file = fdopen(fd, "r");
-	if (file == NULL) {
-		ERR(sh, "Unable to open %s\n", path);
-		close(fd);
-		return -1;
-	}
-
-	if ((size = bunzip(sh, file, &uncompress)) > 0) {
-		*data = mmap(0, size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
-		if (*data == MAP_FAILED) {
-			free(uncompress);
-			fclose(file);
-			return -1;
-		} else {
-			memcpy(*data, uncompress, size);
-		}
-		free(uncompress);
-		*compressed = 1;
-	} else {
-		struct stat sb;
-		if (fstat(fd, &sb) == -1 ||
-		    (*data = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0)) ==
-		    MAP_FAILED) {
-			size = -1;
-		} else {
-			size = sb.st_size;
-		}
-		*compressed = 0;
-	}
-
-	fclose(file);
-
-	return size;
-}
-
 /* Writes a block of data to a file.  Returns 0 on success, -1 on
  * error. */
 static int write_file(semanage_handle_t * sh,
@@ -2491,9 +2303,6 @@ check_lang_ext:
 		ERR(sh,
 		    "Unable to read %s module lang ext file.",
 		    (*modinfo)->name);
-		ERR(sh,
-		    "check_flag:%d, check_and_restore_module_flag:%d.",
-		    check_flag, check_and_restore_module_flag);
 		status = -1;
 		goto cleanup;
 	}
@@ -2995,9 +2804,9 @@ static int semanage_direct_install_info(semanage_handle_t *sh,
 
 		if (higher_info->enabled == 0 && modinfo->enabled == -1) {
 			errno = 0;
-			//WARN(sh,
-			//     "%s module will be disabled after install as there is a disabled instance of this module present in the system.",
-			//     modinfo->name);
+			WARN(sh,
+			     "%s module will be disabled after install as there is a disabled instance of this module present in the system.",
+			     modinfo->name);
 		}
 	}
 

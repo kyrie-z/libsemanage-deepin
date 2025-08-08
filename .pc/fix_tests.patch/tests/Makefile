@@ -18,7 +18,7 @@ $(EXECUTABLE): $(OBJECTS) ../src/libsemanage.a
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 %.policy: %.cil
-	secilc $*.cil -o $*.policy -f /dev/null
+	../../secilc/secilc $*.cil -o $*.policy -f /dev/null
 
 clean distclean: 
 	rm -rf $(OBJECTS) $(POLICIES) $(EXECUTABLE)

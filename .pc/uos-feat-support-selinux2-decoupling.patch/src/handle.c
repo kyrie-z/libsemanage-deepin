@@ -88,11 +88,8 @@ semanage_handle_t *semanage_handle_create(void)
 
 	sh->commit_err = 0;
 
-	/* By default always reload policy after commit if SELinux is enabled.
-	 * if only selinux2 is enabled, selinux_mnt is not NULL but is_selinux_enabled
-	 * will return 0, so use security_getenforce() here is the best way.
-	*/
-	sh->do_reload = (security_getenforce() >= 0);
+	/* By default always reload policy after commit if SELinux is enabled. */
+	sh->do_reload = (is_selinux_enabled() > 0);
 
 	/* By default always check the file contexts file. */
 	sh->do_check_contexts = 1;
@@ -258,17 +255,7 @@ uint16_t semanage_get_default_priority(semanage_handle_t *sh)
 
 int semanage_set_default_priority(semanage_handle_t *sh, uint16_t priority)
 {
-#define RESTORE_MODULE_FLAG 0x8000
-#define RESTORE_MODULE_MASK 0x7fff
-	int restore_flag = priority & RESTORE_MODULE_FLAG;
-
 	assert(sh != NULL);
-
-	if (restore_flag) {
-		priority = priority & RESTORE_MODULE_MASK;
-		semanage_direct_set_restore_module_flag(sh,1);
-	} else
-		semanage_direct_set_restore_module_flag(sh,0);
 
 	/* Verify priority */
 	if (semanage_module_validate_priority(priority) < 0) {
