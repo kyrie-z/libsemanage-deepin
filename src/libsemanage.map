@@ -349,4 +349,5 @@ LIBSEMANAGE_1.1 {
 LIBSEMANAGE_3.4 {
     semanage_module_compute_checksum;
     semanage_set_check_ext_changes;
+    semanage_handle_create_with_backend;
 } LIBSEMANAGE_1.1;

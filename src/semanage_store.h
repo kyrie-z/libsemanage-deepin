@@ -92,7 +92,7 @@ enum semanage_final_path_defs {
 /* FIXME: this needs to be made a module store specific init and the
  * global configuration moved to another file.
  */
-char *semanage_conf_path(void);
+char *semanage_conf_path(semanage_handle_t *sh);
 
 int semanage_check_init(semanage_handle_t *sh, const char *prefix);
 

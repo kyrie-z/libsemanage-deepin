@@ -129,7 +129,7 @@ int semanage_seuser_set_name(semanage_handle_t * handle,
 }
 
 
-/* Selinux Name */
+/* Security Name */
 const char *semanage_seuser_get_sename(const semanage_seuser_t * seuser)
 {
 
@@ -144,7 +144,7 @@ int semanage_seuser_set_sename(semanage_handle_t * handle,
 	char *tmp_sename = strdup(sename);
 	if (!tmp_sename) {
 		ERR(handle,
-		    "out of memory, could not set seuser (SELinux) name");
+		    "out of memory, could not set seuser security  name");
 		return STATUS_ERR;
 	}
 	free(seuser->sename);

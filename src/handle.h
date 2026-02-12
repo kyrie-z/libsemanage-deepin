@@ -55,6 +55,7 @@ struct semanage_handle {
 	sepol_handle_t *sepolh;
 
 	semanage_conf_t *conf;
+	enum semanage_security_backend security_backend;
 
 	uint16_t priority;
 	int is_connected;

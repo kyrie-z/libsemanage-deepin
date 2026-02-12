@@ -21,8 +21,6 @@
 
 /* This file implements only the publicly-visible handle functions to libsemanage. */
 
-#include <selinux/selinux.h>
-
 #include <ctype.h>
 #include <stdarg.h>
 #include <assert.h>
@@ -34,6 +32,7 @@
 #include "direct_api.h"
 #include "handle.h"
 #include "debug.h"
+#include "security_compat.h"
 #include "semanage_conf.h"
 #include "semanage_store.h"
 
@@ -58,7 +57,7 @@ const char * semanage_root(void)
 }
 
 
-semanage_handle_t *semanage_handle_create(void)
+static semanage_handle_t *semanage_handle_create_common(enum semanage_security_backend backend)
 {
 	semanage_handle_t *sh = NULL;
 	char *conf_name = NULL;
@@ -67,10 +66,13 @@ semanage_handle_t *semanage_handle_create(void)
 	if ((sh = calloc(1, sizeof(semanage_handle_t))) == NULL)
 		goto err;
 
-	if ((conf_name = semanage_conf_path()) == NULL)
+	if (semanage_compat_set_backend(sh, backend) < 0)
 		goto err;
 
-	if ((sh->conf = semanage_conf_parse(conf_name)) == NULL)
+	if ((conf_name = semanage_conf_path(sh)) == NULL)
+		goto err;
+
+	if ((sh->conf = semanage_conf_parse(sh, conf_name)) == NULL)
 		goto err;
 
 	/* Link to sepol handle */
@@ -92,7 +94,7 @@ semanage_handle_t *semanage_handle_create(void)
 	 * if only selinux2 is enabled, selinux_mnt is not NULL but is_selinux_enabled
 	 * will return 0, so use security_getenforce() here is the best way.
 	*/
-	sh->do_reload = (security_getenforce() >= 0);
+	sh->do_reload = (semanage_compat_security_getenforce(sh) >= 0);
 
 	/* By default always check the file contexts file. */
 	sh->do_check_contexts = 1;
@@ -115,6 +117,16 @@ semanage_handle_t *semanage_handle_create(void)
 	free(conf_name);
 	semanage_handle_destroy(sh);
 	return NULL;
+}
+
+semanage_handle_t *semanage_handle_create(void)
+{
+	return semanage_handle_create_common(SEMANAGE_SECURITY_BACKEND_SELINUX);
+}
+
+semanage_handle_t *semanage_handle_create_with_security_backend(enum semanage_security_backend backend)
+{
+	return semanage_handle_create_common(backend);
 }
 
 void semanage_set_rebuild(semanage_handle_t * sh, int do_rebuild)

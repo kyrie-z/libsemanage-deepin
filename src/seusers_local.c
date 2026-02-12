@@ -256,18 +256,18 @@ static int validate_handler(const semanage_seuser_t * seuser, void *varg)
 	const char *mls_range = semanage_seuser_get_mlsrange(seuser);
 	const char *user_mls_range;
 
-	/* Make sure the (SElinux) user exists */
+	/* Make sure the (SElinux/USEC) user exists */
 	if (semanage_user_key_create(handle, sename, &key) < 0)
 		goto err;
 	if (semanage_user_exists(handle, key, &exists) < 0)
 		goto err;
 	if (!exists) {
-		ERR(handle, "selinux user %s does not exist", sename);
+		ERR(handle, "selinux/usec user %s does not exist", sename);
 		goto invalid;
 	}
 
 	/* Verify that the mls range is valid, and that it's contained
-	 * within the (SELinux) user mls range. This range is optional */
+	 * within the (SELinux/USEC) user mls range. This range is optional */
 	if (mls_range && sepol_policydb_mls_enabled(policydb)) {
 
 		if (semanage_user_query(handle, key, &user) < 0)
@@ -282,7 +282,7 @@ static int validate_handler(const semanage_seuser_t * seuser, void *varg)
 
 		if (!mls_ok) {
 			ERR(handle, "MLS range %s for Unix user %s "
-			    "exceeds allowed range %s for SELinux user %s",
+			    "exceeds allowed range %s for SELinux/USEC user %s",
 			    mls_range, name, user_mls_range, sename);
 			goto invalid;
 		}

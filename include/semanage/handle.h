@@ -30,9 +30,19 @@
 struct semanage_handle;
 typedef struct semanage_handle semanage_handle_t;
 
+/* Select which security backend libsemanage should use. */
+enum semanage_security_backend {
+	SEMANAGE_SECURITY_BACKEND_SELINUX = 0,
+	SEMANAGE_SECURITY_BACKEND_USEC = 1
+};
+
 /* Create and return a semanage handle.
    The handle is initially in the disconnected state. */
 extern semanage_handle_t *semanage_handle_create(void);
+
+/* Create a semanage handle and select a security backend.
+ * Returns NULL if the backend is not supported by this build. */
+extern semanage_handle_t *semanage_handle_create_with_security_backend(enum semanage_security_backend backend);
 
 /* Deallocate all space associated with a semanage_handle_t, including
  * the pointer itself.	CAUTION: this function does not disconnect

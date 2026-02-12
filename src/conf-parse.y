@@ -23,13 +23,14 @@
 #include "semanage_conf.h"
 
 #include <sepol/policydb.h>
-#include <selinux/selinux.h>
 #include <semanage/handle.h>
 
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "security_compat.h"
 
 extern int semanage_lex(void);                /* defined in conf-scan.c */
 extern int semanage_lex_destroy(void);        /* defined in conf-scan.c */
@@ -46,6 +47,7 @@ static int new_external_prog(external_prog_t **chain);
 
 static semanage_conf_t *current_conf;
 static external_prog_t *new_external;
+static semanage_handle_t *current_handle;
 static int parse_errors;
 
 #define PASSIGN(p1,p2) { free(p1); p1 = p2; }
@@ -350,10 +352,18 @@ external_opt:   PROG_PATH '=' ARG  { PASSIGN(new_external->path, $3); }
 static int semanage_conf_init(semanage_conf_t * conf)
 {
 	conf->store_type = SEMANAGE_CON_DIRECT;
-	conf->store_path = strdup(basename(selinux_policy_root()));
+	conf->store_path = strdup(basename(semanage_compat_security_policy_root(current_handle)));
 	conf->ignoredirs = NULL;
-	conf->store_root_path = strdup("/var/lib/selinux");
-	conf->compiler_directory_path = strdup("/usr/libexec/selinux/hll");
+	
+	/* Set default paths based on security backend */
+	if (semanage_compat_get_backend(current_handle) == SEMANAGE_SECURITY_BACKEND_USEC) {
+		conf->store_root_path = strdup("/var/lib/usec");
+		conf->compiler_directory_path = strdup("/usr/libexec/usec/hll");
+	} else {
+		conf->store_root_path = strdup("/var/lib/selinux");
+		conf->compiler_directory_path = strdup("/usr/libexec/selinux/hll");
+	}
+	
 	conf->policyvers = sepol_policy_kern_vers_max();
 	conf->target_platform = SEPOL_TARGET_SELINUX;
 	conf->expand_check = 1;
@@ -421,8 +431,9 @@ static int semanage_conf_init(semanage_conf_t * conf)
  * default values.  If the file could not be parsed correctly or if
  * out of memory return NULL.
  */
-semanage_conf_t *semanage_conf_parse(const char *config_filename)
+semanage_conf_t *semanage_conf_parse(semanage_handle_t *handle, const char *config_filename)
 {
+	current_handle = handle;
 	if ((current_conf = calloc(1, sizeof(*current_conf))) == NULL) {
 		return NULL;
 	}
@@ -506,7 +517,7 @@ static int parse_module_store(char *arg)
 	if (strcmp(arg, "direct") == 0) {
 		current_conf->store_type = SEMANAGE_CON_DIRECT;
 		current_conf->store_path =
-		    strdup(basename(selinux_policy_root()));
+		    strdup(basename(semanage_compat_security_policy_root(current_handle)));
 		current_conf->server_port = -1;
 	} else if (*arg == '/') {
 		current_conf->store_type = SEMANAGE_CON_POLSERV_LOCAL;

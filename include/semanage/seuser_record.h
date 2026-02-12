@@ -34,7 +34,7 @@ extern int semanage_seuser_set_name(semanage_handle_t * handle,
 				    semanage_seuser_t * seuser,
 				    const char *name);
 
-/* Selinux Name */
+/* Security Name */
 extern const char *semanage_seuser_get_sename(const semanage_seuser_t * seuser);
 
 extern int semanage_seuser_set_sename(semanage_handle_t * handle,

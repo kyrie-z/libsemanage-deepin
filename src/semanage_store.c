@@ -36,7 +36,6 @@ typedef struct dbase_policydb dbase_t;
 #include "database_policydb.h"
 #include "handle.h"
 
-#include <selinux/selinux.h>
 #include <sepol/policydb.h>
 #include <sepol/module.h>
 
@@ -60,6 +59,7 @@ typedef struct dbase_policydb dbase_t;
 #include "debug.h"
 #include "utilities.h"
 #include "compressed_file.h"
+#include "security_compat.h"
 
 #define SEMANAGE_CONF_FILE "semanage.conf"
 /* relative path names to enum semanage_paths to special files and
@@ -77,6 +77,8 @@ enum semanage_file_defs {
 static char *semanage_paths[SEMANAGE_NUM_STORES][SEMANAGE_STORE_NUM_PATHS];
 static char *semanage_files[SEMANAGE_NUM_FILES] = { NULL };
 static int semanage_paths_initialized = 0;
+static enum semanage_security_backend semanage_paths_backend =
+	SEMANAGE_SECURITY_BACKEND_SELINUX;
 
 /* These are paths relative to the bottom of the module store */
 static const char *semanage_relative_files[SEMANAGE_NUM_FILES] = {
@@ -247,9 +249,9 @@ static int semanage_init_final(semanage_handle_t *sh, const char *prefix)
 		store_path);
 
 	/* SEMANAGE_FINAL_SELINUX */
-	const char *selinux_root = selinux_path();
+	const char *security_root = semanage_compat_security_path(sh);
 	len = strlen(semanage_root()) +
-	      strlen(selinux_root) +
+	      strlen(security_root) +
 	      strlen(semanage_final_prefix[SEMANAGE_FINAL_SELINUX]) +
 	      store_len;
 	semanage_final[SEMANAGE_FINAL_SELINUX] = malloc(len + 1);
@@ -261,7 +263,7 @@ static int semanage_init_final(semanage_handle_t *sh, const char *prefix)
 	sprintf(semanage_final[SEMANAGE_FINAL_SELINUX],
 		"%s%s%s%s",
 		semanage_root(),
-		selinux_root,
+		security_root,
 		semanage_final_prefix[SEMANAGE_FINAL_SELINUX],
 		store_path);
 
@@ -282,7 +284,7 @@ static int semanage_init_final_suffix(semanage_handle_t *sh)
 	int ret = 0;
 	int status = 0;
 	char path[PATH_MAX];
-	size_t offset = strlen(selinux_policy_root());
+	size_t offset = strlen(semanage_compat_security_policy_root(sh));
 
 	semanage_final_suffix[SEMANAGE_FINAL_TOPLEVEL] = strdup("");
 	if (semanage_final_suffix[SEMANAGE_FINAL_TOPLEVEL] == NULL) {
@@ -292,7 +294,7 @@ static int semanage_init_final_suffix(semanage_handle_t *sh)
 	}
 
 	semanage_final_suffix[SEMANAGE_FC] =
-		strdup(selinux_file_context_path() + offset);
+		strdup(semanage_compat_security_file_context_path(sh) + offset);
 	if (semanage_final_suffix[SEMANAGE_FC] == NULL) {
 		ERR(sh, "Unable to allocate space for file context path.");
 		status = -1;
@@ -307,7 +309,7 @@ static int semanage_init_final_suffix(semanage_handle_t *sh)
 	}
 
 	semanage_final_suffix[SEMANAGE_FC_HOMEDIRS] =
-		strdup(selinux_file_context_homedir_path() + offset);
+		strdup(semanage_compat_security_file_context_homedir_path(sh) + offset);
 	if (semanage_final_suffix[SEMANAGE_FC_HOMEDIRS] == NULL) {
 		ERR(sh, "Unable to allocate space for file context home directory path.");
 		status = -1;
@@ -322,7 +324,7 @@ static int semanage_init_final_suffix(semanage_handle_t *sh)
 	}
 
 	semanage_final_suffix[SEMANAGE_FC_LOCAL] =
-		strdup(selinux_file_context_local_path() + offset);
+		strdup(semanage_compat_security_file_context_local_path(sh) + offset);
 	if (semanage_final_suffix[SEMANAGE_FC_LOCAL] == NULL) {
 		ERR(sh, "Unable to allocate space for local file context path.");
 		status = -1;
@@ -337,7 +339,7 @@ static int semanage_init_final_suffix(semanage_handle_t *sh)
 	}
 
 	semanage_final_suffix[SEMANAGE_NC] =
-		strdup(selinux_netfilter_context_path() + offset);
+		strdup(semanage_compat_security_netfilter_context_path(sh) + offset);
 	if (semanage_final_suffix[SEMANAGE_NC] == NULL) {
 		ERR(sh, "Unable to allocate space for netfilter context path.");
 		status = -1;
@@ -345,7 +347,7 @@ static int semanage_init_final_suffix(semanage_handle_t *sh)
 	}
 
 	semanage_final_suffix[SEMANAGE_SEUSERS] =
-		strdup(selinux_usersconf_path() + offset);
+		strdup(semanage_compat_security_usersconf_path(sh) + offset);
 	if (semanage_final_suffix[SEMANAGE_SEUSERS] == NULL) {
 		ERR(sh, "Unable to allocate space for userconf path.");
 		status = -1;
@@ -355,7 +357,7 @@ static int semanage_init_final_suffix(semanage_handle_t *sh)
 	ret = snprintf(path,
 		       sizeof(path),
 		       "%s.%d",
-		       selinux_binary_policy_path() + offset,
+		       semanage_compat_security_binary_policy_path(sh) + offset,
 		       sh->conf->policyvers);
 	if (ret < 0 || ret >= (int)sizeof(path)) {
 		ERR(sh, "Unable to compose policy binary path.");
@@ -432,8 +434,10 @@ cleanup:
 int semanage_check_init(semanage_handle_t *sh, const char *prefix)
 {
 	int rc;
+	enum semanage_security_backend backend = semanage_compat_get_backend(sh);
 	if (semanage_paths_initialized == 0) {
 		char root[PATH_MAX];
+		semanage_paths_backend = backend;
 
 		rc = snprintf(root,
 			      sizeof(root),
@@ -465,6 +469,10 @@ int semanage_check_init(semanage_handle_t *sh, const char *prefix)
 			return rc;
 
 		semanage_paths_initialized = 1;
+	}
+	if (semanage_paths_backend != backend) {
+		ERR(sh, "semanage store paths initialized for different security backend");
+		return -1;
 	}
 	return 0;
 }
@@ -512,21 +520,25 @@ const char *semanage_final_path(enum semanage_final_defs store,
  *
  * The caller is responsible for freeing the returned string.
  */
-char *semanage_conf_path(void)
+char *semanage_conf_path(semanage_handle_t *sh)
 {
 	char *semanage_conf = NULL;
 	int len;
 	struct stat sb;
 
-	len = strlen(semanage_root()) + strlen(selinux_path()) + strlen(SEMANAGE_CONF_FILE);
+	len = strlen(semanage_root()) +
+	      strlen(semanage_compat_security_path(sh)) +
+	      strlen(SEMANAGE_CONF_FILE);
 	semanage_conf = calloc(len + 1, sizeof(char));
 	if (!semanage_conf)
 		return NULL;
-	snprintf(semanage_conf, len + 1, "%s%s%s", semanage_root(), selinux_path(),
+	snprintf(semanage_conf, len + 1, "%s%s%s", semanage_root(),
+		 semanage_compat_security_path(sh),
 		 SEMANAGE_CONF_FILE);
 
 	if (stat(semanage_conf, &sb) != 0 && errno == ENOENT) {
-		snprintf(semanage_conf, len + 1, "%s%s", selinux_path(), SEMANAGE_CONF_FILE);
+		snprintf(semanage_conf, len + 1, "%s%s",
+			 semanage_compat_security_path(sh), SEMANAGE_CONF_FILE);
 	}
 
 	return semanage_conf;
@@ -1683,7 +1695,7 @@ static int semanage_install_final_tmp(semanage_handle_t * sh)
 	 * and what we are installing to, to decide if they are the same store. If
 	 * they are not then we do not reload policy.
 	 */
-	const char *really_active_store = selinux_policy_root();
+	const char *really_active_store = semanage_compat_security_policy_root(sh);
 	struct stat astore;
 	struct stat istore;
 	const char *storepath = semanage_final_path(SEMANAGE_FINAL_SELINUX,

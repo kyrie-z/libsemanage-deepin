@@ -22,7 +22,6 @@
 #include <sepol/module.h>
 #include <sepol/handle.h>
 #include <sepol/cil/cil.h>
-#include <selinux/selinux.h>
 
 #include <assert.h>
 #include <fcntl.h>
@@ -59,6 +58,7 @@
 #include "database_policydb.h"
 #include "policy.h"
 #include "sha256.h"
+#include "security_compat.h"
 
 #define PIPE_READ 0
 #define PIPE_WRITE 1
@@ -698,7 +698,7 @@ static int semanage_direct_update_user_extra(semanage_handle_t * sh, cil_db_t *c
 		/*
 		 * Write the users_extra file; users_extra.local
 		 * will be merged into this file.
-		 */
+	 	*/
 		ofilename = semanage_path(SEMANAGE_TMP, SEMANAGE_USERS_EXTRA);
 		if (ofilename == NULL) {
 			retval = -1;
@@ -1768,7 +1768,7 @@ static int semanage_direct_commit(semanage_handle_t * sh)
 		}
 	} else {
 		WARN(sh, "WARNING: genhomedircon is disabled. \
-                               See /etc/selinux/semanage.conf if you need to enable it.");
+                               See semanage.conf if you need to enable it.");
         }
 
 	/* free out, if we don't free it before calling semanage_install_sandbox 
@@ -1944,7 +1944,7 @@ static int semanage_direct_install_file(semanage_handle_t * sh,
 			goto cleanup;
 		}
 	} else if (strcmp(module_name, filename) != 0) {
-		fprintf(stderr, "Warning: SELinux userspace will refer to the module from %s as %s rather than %s\n", install_filename, module_name, filename);
+		fprintf(stderr, "Warning: security userspace will refer to the module from %s as %s rather than %s\n", install_filename, module_name, filename);
 	}
 
 	retval = semanage_direct_install(sh, contents.data, contents.len,
@@ -2478,7 +2478,11 @@ check_lang_ext:
 	/* set module ext */
 	if (getline(&tmp, &size, fp) < 0) {
 		if (!check_flag && check_and_restore_module_flag) {
-			snprintf(pp_path, sizeof(pp_path), "/usr/share/selinux/%s/%s.pp.bz2", sh->conf->store_path, modkey->name);
+			if (semanage_compat_get_backend(sh) == SEMANAGE_SECURITY_BACKEND_USEC) {
+				snprintf(pp_path, sizeof(pp_path), "/usr/share/usec/%s/%s.pp.bz2", sh->conf->store_path, modkey->name);
+			} else {
+				snprintf(pp_path, sizeof(pp_path), "/usr/share/selinux/%s/%s.pp.bz2", sh->conf->store_path, modkey->name);
+			}
 			if (access(pp_path, F_OK) == 0) {
 				fclose(fp);
 				fp = NULL;
@@ -3516,7 +3520,11 @@ int semanage_direct_check_and_restore_all_modules(semanage_handle_t *sh)
 						(&modinfo),
 					&modinfo_tmp);
 			if (ret != 0) {
-				snprintf(pp_path, sizeof(pp_path), "/usr/share/selinux/%s/%s.pp.bz2", sh->conf->store_path, modules[j]->d_name);
+				if (semanage_compat_get_backend(sh) == SEMANAGE_SECURITY_BACKEND_USEC) {
+					snprintf(pp_path, sizeof(pp_path), "/usr/share/usec/%s/%s.pp.bz2", sh->conf->store_path, modules[j]->d_name);
+				} else {
+					snprintf(pp_path, sizeof(pp_path), "/usr/share/selinux/%s/%s.pp.bz2", sh->conf->store_path, modules[j]->d_name);
+				}
 				if (access(pp_path, F_OK) == 0)
 					semanage_direct_restore_module(sh, priority, pp_path);
 			}
@@ -3553,9 +3561,15 @@ cleanup:
 
 int semanage_direct_set_restore_module_flag(semanage_handle_t *sh, int enabled)
  {
-	/* Only security privileged processes(who is allowed to write selinux config file) can enable this flag */
+	/* Only security privileged processes(who is allowed to write selinux/usec config file) can enable this flag */
 	if (enabled) {
-		int fd = open("/etc/selinux/config", O_WRONLY);
+		const char *config_path;
+		if (semanage_compat_get_backend(sh) == SEMANAGE_SECURITY_BACKEND_USEC) {
+			config_path = "/etc/usec/config";
+		} else {
+			config_path = "/etc/selinux/config";
+		}
+		int fd = open(config_path, O_WRONLY);
 		if (fd < 0)
 			return -1;
 		close(fd);
@@ -3563,5 +3577,4 @@ int semanage_direct_set_restore_module_flag(semanage_handle_t *sh, int enabled)
 	check_and_restore_module_flag = enabled > 0 ? 1 : 0;
 	return 0;
  }
-
 

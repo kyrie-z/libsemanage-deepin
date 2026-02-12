@@ -65,7 +65,7 @@ typedef struct external_prog {
 	struct external_prog *next;
 } external_prog_t;
 
-semanage_conf_t *semanage_conf_parse(const char *config_filename);
+semanage_conf_t *semanage_conf_parse(semanage_handle_t *handle, const char *config_filename);
 void semanage_conf_destroy(semanage_conf_t * conf);
 
 #endif

@@ -23,7 +23,7 @@ typedef semanage_bool_key_t record_key_t;
 #include "boolean_internal.h"
 #include "handle.h"
 #include "database.h"
-#include <selinux/selinux.h>
+#include "security_compat.h"
 
 /* Key */
 int semanage_bool_key_create(semanage_handle_t * handle,
@@ -85,17 +85,17 @@ int semanage_bool_set_name(semanage_handle_t * handle,
 	int rc = -1;
 	const char *prefix = semanage_root();
 	const char *storename = handle->conf->store_path;
-	const char *selinux_root = selinux_policy_root();
+	const char *secuirty_root = semanage_compat_security_policy_root(handle);
 	char *oldroot;
 	char *olddir;
 	char *subname = NULL;
 	char *newroot = NULL;
 	char *end;
 
-	if (!selinux_root)
+	if (!secuirty_root)
 		return -1;
 
-	oldroot = strdup(selinux_root);
+	oldroot = strdup(secuirty_root);
 	if (!oldroot)
 		return -1;
 	olddir = strdup(oldroot);
@@ -111,19 +111,19 @@ int semanage_bool_set_name(semanage_handle_t * handle,
 		goto out;
 
 	if (strcmp(oldroot, newroot)) {
-		rc = selinux_set_policy_root(newroot);
+		rc = semanage_compat_security_set_policy_root(handle, newroot);
 		if (rc)
 			goto out;
 	}
 
-	subname = selinux_boolean_sub(name);
+	subname = semanage_compat_security_boolean_sub(handle, name);
 	if (!subname) {
 		rc = -1;
 		goto out;
 	}
 
 	if (strcmp(oldroot, newroot)) {
-		rc = selinux_set_policy_root(oldroot);
+		rc = semanage_compat_security_set_policy_root(handle, oldroot);
 		if (rc)
 			goto out;
 	}

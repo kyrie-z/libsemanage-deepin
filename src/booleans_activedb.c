@@ -12,12 +12,12 @@ typedef struct dbase_activedb dbase_t;
 
 #include <stdlib.h>
 #include <string.h>
-#include <selinux/selinux.h>
 #include <semanage/handle.h>
 #include "boolean_internal.h"
 #include "database_activedb.h"
 #include "parse_utils.h"
 #include "debug.h"
+#include "security_compat.h"
 
 static int bool_read_list(semanage_handle_t * handle,
 			  semanage_bool_t *** booleans, unsigned int *count)
@@ -31,7 +31,7 @@ static int bool_read_list(semanage_handle_t * handle,
 	int len = 0;
 
 	/* Fetch boolean names */
-	if (security_get_boolean_names(&names, &len) < 0) {
+	if (semanage_compat_security_get_boolean_names(handle, &names, &len) < 0) {
 		ERR(handle, "could not get list of boolean names");
 		goto err;
 	}
@@ -54,7 +54,7 @@ static int bool_read_list(semanage_handle_t * handle,
 					   tmp_booleans[i], names[i]) < 0)
 			goto err;
 
-		value = security_get_boolean_active(names[i]);
+		value = semanage_compat_security_get_boolean_active(handle, names[i]);
 		if (value < 0) {
 			ERR(handle, "could not get the value "
 			    "for boolean %s", names[i]);
@@ -108,7 +108,7 @@ static int bool_commit_list(semanage_handle_t * handle,
 		if (!name)
 			goto omem;	
 		newvalue = semanage_bool_get_value(booleans[i]);
-		curvalue = security_get_boolean_active(name);
+		curvalue = semanage_compat_security_get_boolean_active(handle, name);
 		if (newvalue == curvalue)
 			continue;
 		blist[bcount].name = strdup(name);
@@ -119,8 +119,8 @@ static int bool_commit_list(semanage_handle_t * handle,
 	}
 
 	/* Commit */
-	if (security_set_boolean_list(bcount, blist, 0) < 0) {
-		ERR(handle, "libselinux commit failed");
+	if (semanage_compat_security_set_boolean_list(handle, bcount, blist, 0) < 0) {
+		ERR(handle, "security backend commit failed");
 		goto err;
 	}
 
